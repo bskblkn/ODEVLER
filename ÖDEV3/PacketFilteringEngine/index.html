@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Packet Filtering Engine</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #111827;
+            color: white;
+            padding: 22px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 30px;
+        }
+
+        header p {
+            margin-top: 8px;
+            color: #d1d5db;
+        }
+
+        .container {
+            width: 92%;
+            margin: 25px auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 22px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+        }
+
+        .full-width {
+            grid-column: span 2;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #111827;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: bold;
+            color: #374151;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 9px;
+            margin-top: 5px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        button {
+            margin-top: 16px;
+            padding: 11px 16px;
+            border: none;
+            background: #2563eb;
+            color: white;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .result {
+            margin-top: 16px;
+            padding: 14px;
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 8px;
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        .allow {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .deny {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .stats {
+            line-height: 2;
+            background: #f9fafb;
+            padding: 14px;
+            border-radius: 8px;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 14px;
+        }
+
+        th, td {
+            border: 1px solid #d1d5db;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #111827;
+            color: white;
+        }
+
+        .badge-allow {
+            color: #166534;
+            font-weight: bold;
+        }
+
+        .badge-deny {
+            color: #991b1b;
+            font-weight: bold;
+        }
+
+        footer {
+            text-align: center;
+            color: #6b7280;
+            margin: 30px;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>Packet Filtering Engine</h1>
+    <p>Category: Security Tools | C++ OOP Project Web Interface</p>
+</header>
+
+<div class="container">
+
+    <div class="card">
+        <h2>Check Single Packet</h2>
+
+        <label>Source IP</label>
+        <input type="text" id="sourceIP" value="192.168.1.10">
+
+        <label>Destination IP</label>
+        <input type="text" id="destinationIP" value="10.0.0.5">
+
+        <label>Protocol</label>
+        <select id="protocol">
+            <option>TCP</option>
+            <option>UDP</option>
+            <option>ICMP</option>
+        </select>
+
+        <label>Port</label>
+        <input type="number" id="port" value="80">
+
+        <button onclick="checkPacket()">Check Packet</button>
+
+        <div id="resultBox" class="result">
+            Filtering Result: -
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Add New Rule</h2>
+
+        <label>Action</label>
+        <select id="ruleAction">
+            <option>ALLOW</option>
+            <option>DENY</option>
+        </select>
+
+        <label>Protocol</label>
+        <select id="ruleProtocol">
+            <option>TCP</option>
+            <option>UDP</option>
+            <option>ICMP</option>
+            <option>ANY</option>
+        </select>
+
+        <label>Source IP or ANY</label>
+        <input type="text" id="ruleSourceIP" value="ANY">
+
+        <label>Destination IP or ANY</label>
+        <input type="text" id="ruleDestinationIP" value="ANY">
+
+        <label>Port or ANY</label>
+        <input type="text" id="rulePort" value="ANY">
+
+        <button onclick="addRule()">Add Rule</button>
+    </div>
+
+    <div class="card">
+        <h2>Current Rules</h2>
+        <ul id="rulesList"></ul>
+    </div>
+
+    <div class="card">
+        <h2>Statistics</h2>
+
+        <div class="stats">
+            Total Checked Packets: <span id="totalPackets">0</span><br>
+            Allowed Packets: <span id="allowedPackets">0</span><br>
+            Denied Packets: <span id="deniedPackets">0</span>
+        </div>
+    </div>
+
+    <div class="card full-width">
+        <h2>Batch Packet Analysis with CSV Dataset</h2>
+
+        <p>
+            Select a CSV file containing packet data.
+            Expected columns:
+            <b>sourceIP,destinationIP,protocol,port</b>
+        </p>
+
+        <input type="file" id="csvFile" accept=".csv">
+        <button onclick="loadCSV()">Load and Analyze CSV</button>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Source IP</th>
+                    <th>Destination IP</th>
+                    <th>Protocol</th>
+                    <th>Port</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody id="batchResults"></tbody>
+        </table>
+    </div>
+
+    <div class="card full-width">
+        <h2>Logs</h2>
+        <ul id="logsList"></ul>
+    </div>
+
+</div>
+
+<footer>
+    Packet Filtering Engine - Security Tools
+</footer>
+
+<script>
+    let rules = [
+        {
+            action: "ALLOW",
+            protocol: "TCP",
+            sourceIP: "192.168.1.10",
+            destinationIP: "ANY",
+            port: 80
+        },
+        {
+            action: "DENY",
+            protocol: "UDP",
+            sourceIP: "ANY",
+            destinationIP: "ANY",
+            port: 53
+        },
+        {
+            action: "ALLOW",
+            protocol: "TCP",
+            sourceIP: "ANY",
+            destinationIP: "10.0.0.8",
+            port: 443
+        }
+    ];
+
+    let totalPackets = 0;
+    let allowedPackets = 0;
+    let deniedPackets = 0;
+
+    function ruleMatches(rule, packet) {
+        let protocolMatches = rule.protocol === "ANY" || rule.protocol === packet.protocol;
+        let sourceMatches = rule.sourceIP === "ANY" || rule.sourceIP === packet.sourceIP;
+        let destinationMatches = rule.destinationIP === "ANY" || rule.destinationIP === packet.destinationIP;
+        let portMatches = rule.port === -1 || rule.port === packet.port;
+
+        return protocolMatches && sourceMatches && destinationMatches && portMatches;
+    }
+
+    function evaluatePacket(packet) {
+        for (let rule of rules) {
+            if (ruleMatches(rule, packet)) {
+                return rule.action;
+            }
+        }
+
+        return "DENY";
+    }
+
+    function checkPacket() {
+        let packet = {
+            sourceIP: document.getElementById("sourceIP").value.trim(),
+            destinationIP: document.getElementById("destinationIP").value.trim(),
+            protocol: document.getElementById("protocol").value,
+            port: parseInt(document.getElementById("port").value)
+        };
+
+        if (isNaN(packet.port)) {
+            alert("Please enter a valid port number.");
+            return;
+        }
+
+        let result = processPacket(packet);
+        updateResult(result);
+    }
+
+    function processPacket(packet) {
+        let result = evaluatePacket(packet);
+
+        totalPackets++;
+
+        if (result === "ALLOW") {
+            allowedPackets++;
+        } else {
+            deniedPackets++;
+        }
+
+        updateStatistics();
+        addLog(packet, result);
+
+        return result;
+    }
+
+    function updateResult(result) {
+        let resultBox = document.getElementById("resultBox");
+
+        resultBox.textContent = "Filtering Result: " + result;
+
+        resultBox.classList.remove("allow");
+        resultBox.classList.remove("deny");
+
+        if (result === "ALLOW") {
+            resultBox.classList.add("allow");
+        } else {
+            resultBox.classList.add("deny");
+        }
+    }
+
+    function addRule() {
+        let portInput = document.getElementById("rulePort").value.trim().toUpperCase();
+        let portValue;
+
+        if (portInput === "ANY") {
+            portValue = -1;
+        } else {
+            portValue = parseInt(portInput);
+
+            if (isNaN(portValue)) {
+                alert("Please enter a valid port number or ANY.");
+                return;
+            }
+        }
+
+        let newRule = {
+            action: document.getElementById("ruleAction").value,
+            protocol: document.getElementById("ruleProtocol").value,
+            sourceIP: document.getElementById("ruleSourceIP").value.trim().toUpperCase(),
+            destinationIP: document.getElementById("ruleDestinationIP").value.trim().toUpperCase(),
+            port: portValue
+        };
+
+        rules.push(newRule);
+        updateRulesList();
+
+        alert("New rule has been added successfully.");
+    }
+
+    function loadCSV() {
+        let fileInput = document.getElementById("csvFile");
+        let file = fileInput.files[0];
+
+        if (!file) {
+            alert("Please select a CSV file.");
+            return;
+        }
+
+        let reader = new FileReader();
+
+        reader.onload = function(event) {
+            let content = event.target.result;
+            analyzeCSV(content);
+        };
+
+        reader.readAsText(file);
+    }
+
+    function analyzeCSV(content) {
+        let lines = content.trim().split(/\r?\n/);
+        let batchResults = document.getElementById("batchResults");
+
+        batchResults.innerHTML = "";
+
+        for (let i = 1; i < lines.length; i++) {
+            let columns = lines[i].split(",");
+
+            if (columns.length < 4) {
+                continue;
+            }
+
+            let packet = {
+                sourceIP: columns[0].trim(),
+                destinationIP: columns[1].trim(),
+                protocol: columns[2].trim().toUpperCase(),
+                port: parseInt(columns[3].trim())
+            };
+
+            if (isNaN(packet.port)) {
+                continue;
+            }
+
+            let result = processPacket(packet);
+
+            let row = document.createElement("tr");
+
+            row.innerHTML =
+                "<td>" + packet.sourceIP + "</td>" +
+                "<td>" + packet.destinationIP + "</td>" +
+                "<td>" + packet.protocol + "</td>" +
+                "<td>" + packet.port + "</td>" +
+                "<td class='" + (result === "ALLOW" ? "badge-allow" : "badge-deny") + "'>" + result + "</td>";
+
+            batchResults.appendChild(row);
+        }
+    }
+
+    function updateRulesList() {
+        let rulesList = document.getElementById("rulesList");
+        rulesList.innerHTML = "";
+
+        for (let rule of rules) {
+            let li = document.createElement("li");
+            let portText = rule.port === -1 ? "ANY" : rule.port;
+
+            li.textContent =
+                "Rule [" +
+                rule.action + " " +
+                rule.protocol + " " +
+                rule.sourceIP + " " +
+                rule.destinationIP + " " +
+                portText +
+                "]";
+
+            rulesList.appendChild(li);
+        }
+    }
+
+    function updateStatistics() {
+        document.getElementById("totalPackets").textContent = totalPackets;
+        document.getElementById("allowedPackets").textContent = allowedPackets;
+        document.getElementById("deniedPackets").textContent = deniedPackets;
+    }
+
+    function addLog(packet, result) {
+        let logsList = document.getElementById("logsList");
+        let li = document.createElement("li");
+
+        li.textContent =
+            "Packet [Source IP: " + packet.sourceIP +
+            ", Destination IP: " + packet.destinationIP +
+            ", Protocol: " + packet.protocol +
+            ", Port: " + packet.port +
+            "] -> Result: " + result;
+
+        logsList.appendChild(li);
+    }
+
+    updateRulesList();
+    updateStatistics();
+</script>
+
+</body>
+</html>
