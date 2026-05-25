@@ -1,0 +1,1534 @@
+{
+  "name": "BugPilot AI Final Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bug-report",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "78fb7a21-2bc6-4b20-bbc0-410e3f2be2b3",
+      "name": "Receive Bug Report",
+      "webhookId": "REPLACE_WITH_N8N_WEBHOOK_ID_AFTER_IMPORT"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\n\nconst possibleQuestionLists = [\n  body.questions,\n  body.answers,\n  body.submission?.questions,\n  body.submission?.answers,\n  body.data?.questions,\n  body.data?.answers\n].filter(Boolean);\n\nconst questions = possibleQuestionLists[0] || [];\n\nfunction normalizeValue(value) {\n  if (Array.isArray(value)) {\n    return value.map(v => {\n      if (v && typeof v === \"object\") {\n        return v.url || v.fileUrl || v.downloadUrl || v.value || JSON.stringify(v);\n      }\n      return v;\n    }).join(\", \");\n  }\n\n  if (value && typeof value === \"object\") {\n    return value.email || value.url || value.fileUrl || value.downloadUrl || value.value || value.text || value.answer || JSON.stringify(value);\n  }\n\n  return value || \"\";\n}\n\nfunction getQuestion(label) {\n  return questions.find(q => {\n    const name = q.name || q.label || q.title || q.question || q.id || \"\";\n    return name.toLowerCase().trim() === label.toLowerCase().trim();\n  });\n}\n\nfunction getAnswer(label) {\n  const found = getQuestion(label);\n  if (!found) return \"\";\n\n  return normalizeValue(\n    found.value ??\n    found.answer ??\n    found.response ??\n    found.text ??\n    \"\"\n  );\n}\n\nfunction getFile(label) {\n  const found = getQuestion(label);\n\n  if (!found) {\n    return {\n      url: \"\",\n      filename: \"\"\n    };\n  }\n\n  const value = found.value;\n\n  if (Array.isArray(value) && value.length > 0) {\n    return {\n      url: value[0]?.url || value[0]?.fileUrl || value[0]?.downloadUrl || \"\",\n      filename: value[0]?.filename || value[0]?.name || \"\"\n    };\n  }\n\n  if (value && typeof value === \"object\") {\n    return {\n      url: value.url || value.fileUrl || value.downloadUrl || \"\",\n      filename: value.filename || value.name || \"\"\n    };\n  }\n\n  return {\n    url: typeof value === \"string\" ? value : \"\",\n    filename: \"\"\n  };\n}\n\nconst attachment = getFile(\"Ekran Görüntüsü / Dosya\");\nconst audio = getFile(\"Sesli Açıklama\");\n\nreturn [\n  {\n    json: {\n      name: getAnswer(\"Ad Soyad\"),\n      email: getAnswer(\"Email\"),\n      product_page: getAnswer(\"Ürün / Sayfa Adı\"),\n      title: getAnswer(\"Bug Başlığı\"),\n      description: getAnswer(\"Bug Açıklaması\"),\n      steps: getAnswer(\"Tekrar Etme Adımları\"),\n      expected_result: getAnswer(\"Beklenen Sonuç\"),\n      actual_result: getAnswer(\"Gerçekleşen Sonuç\"),\n      device_browser: getAnswer(\"Cihaz/Tarayıcı\"),\n\n      attachment_url: attachment.url,\n      attachment_filename: attachment.filename,\n\n      audio_url: audio.url,\n      audio_filename: audio.filename,\n\n      transcript: \"\",\n\n      raw_body: body\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "1afeac70-16a6-494b-904d-745faa058ebc",
+      "name": "Normalize Form Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a2a89c02-1af8-46d4-9f55-32155bb0b435",
+              "leftValue": "={{ !!($json.audio_url && String($json.audio_url).trim()) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "8b389210-03b2-406e-bc44-e264889ed802",
+      "name": "Has Audio?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const formData = $node[\"Normalize Form Data\"].json;\n\nreturn [\n  {\n    json: {\n      ...formData,\n      transcript: \"\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        16
+      ],
+      "id": "d4abd96b-2487-4e2a-a05f-d126d13921e3",
+      "name": "Prepare Data Without Transcript"
+    },
+    {
+      "parameters": {
+        "url": "={{ encodeURI($json.audio_url.trim()) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        528,
+        -192
+      ],
+      "id": "10512ceb-ce60-4ecb-80f8-f555b3a08827",
+      "name": "Download Audio"
+    },
+    {
+      "parameters": {
+        "name": "={{$node[\"Normalize Form Data\"].json.audio_filename || \"bug-audio.mp3\"}}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "BugPilot AI Attachments",
+          "cachedResultUrl": "YOUR_GOOGLE_DRIVE_FOLDER_URL"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        736,
+        -192
+      ],
+      "id": "7b076ad1-faef-4d27-9013-75fd9e742b87",
+      "name": "Upload Audio to Google Drive"
+    },
+    {
+      "parameters": {
+        "url": "={{ encodeURI($(\"Normalize Form Data\").first().json.audio_url.trim()) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        -192
+      ],
+      "id": "847c7c1f-a379-4154-8d43-19ed5767f0fa",
+      "name": "Download Audio for Whisper"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{\"https://api.groq.com/openai/v1/audio/transcriptions\"}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GROQ_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "whisper-large-v3-turbo"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1152,
+        -192
+      ],
+      "id": "f288490e-f76c-4300-8cc8-11713ef70a56",
+      "name": "Groq Whisper Transcription"
+    },
+    {
+      "parameters": {
+        "jsCode": "const formData = $(\"Normalize Form Data\").first().json;\nconst groqResult = $input.first().json;\n\nconst transcript =\n  groqResult.text ||\n  groqResult.transcription ||\n  groqResult.data?.text ||\n  \"\";\n\nreturn [\n  {\n    json: {\n      ...formData,\n      transcript\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -192
+      ],
+      "id": "f0740ca4-69b7-42bf-b25e-607e0b0082ce",
+      "name": "Prepare Data With Transcript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENROUTER_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"openrouter/auto\",\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are a software bug triage assistant. Analyze bug reports and return ONLY valid JSON. Do not use markdown. Do not add explanations outside JSON. Category must be one of: UI Bug, Backend Bug, Functionality Bug, Performance Bug, Content Bug, Calculation Bug, Configuration Bug, Crash, Frontend, Backend, Auth, Payment, Database, Other. Severity must be one of: Low, Medium, High, Critical.\"\n    },\n    {\n      role: \"user\",\n      content: [\n        \"Analyze this bug report and create a structured bug triage result.\",\n        \"\",\n        \"Reporter Name:\",\n        $json.name || \"\",\n        \"\",\n        \"Reporter Email:\",\n        $json.email || \"\",\n        \"\",\n        \"Product / Page:\",\n        $json.product_page || \"\",\n        \"\",\n        \"Bug Title:\",\n        $json.title || \"\",\n        \"\",\n        \"Bug Description:\",\n        $json.description || \"\",\n        \"\",\n        \"Steps to Reproduce:\",\n        $json.steps || \"\",\n        \"\",\n        \"Expected Result:\",\n        $json.expected_result || \"\",\n        \"\",\n        \"Actual Result:\",\n        $json.actual_result || \"\",\n        \"\",\n        \"Device / Browser:\",\n        $json.device_browser || \"\",\n        \"\",\n        \"Audio Transcript:\",\n        $json.transcript || \"Sesli açıklama yok.\",\n        \"\",\n        \"Return ONLY this JSON structure:\",\n        JSON.stringify({\n          summary: \"Short summary of the bug\",\n          category: \"One of the allowed categories\",\n          severity: \"Low, Medium, High, or Critical\",\n          possible_cause: \"Most likely technical cause\",\n          suggested_solution: \"Recommended fix or next action\",\n          developer_notes: \"Technical notes for the developer\",\n          missing_information: \"Information still needed from the user, or empty string\",\n          user_reply: \"A polite reply draft to send to the user\"\n        }, null, 2)\n      ].join(\"\\n\")\n    }\n  ],\n  temperature: 0.2\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        16
+      ],
+      "id": "d39ccdf4-9d4b-4128-a5fc-605e8ec1487e",
+      "name": "Generate AI Bug Analysis"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\n\nlet formData = {};\n\ntry {\n  formData = $(\"Prepare Data With Transcript\").first().json;\n} catch (error) {\n  try {\n    formData = $(\"Prepare Data Without Transcript\").first().json;\n  } catch (innerError) {\n    formData = $(\"Normalize Form Data\").first().json;\n  }\n}\n\nconst content =\n  raw.choices?.[0]?.message?.content ||\n  raw.message?.content ||\n  raw.content ||\n  raw.text ||\n  \"\";\n\nlet parsed;\n\ntry {\n  const cleaned = content\n    .replace(/```json/g, \"\")\n    .replace(/```/g, \"\")\n    .trim();\n\n  parsed = JSON.parse(cleaned);\n} catch (error) {\n  parsed = {\n    summary: content || \"AI response could not be parsed.\",\n    category: \"Other\",\n    severity: \"Medium\",\n    possible_cause: \"\",\n    suggested_solution: \"\",\n    developer_notes: \"Parse error: \" + error.message,\n    missing_information: \"\",\n    user_reply: \"\"\n  };\n}\n\nconst allowedCategories = [\n  \"UI Bug\",\n  \"Backend Bug\",\n  \"Functionality Bug\",\n  \"Performance Bug\",\n  \"Content Bug\",\n  \"Calculation Bug\",\n  \"Configuration Bug\",\n  \"Crash\",\n  \"Frontend\",\n  \"Backend\",\n  \"Auth\",\n  \"Payment\",\n  \"Database\",\n  \"Other\"\n];\n\nconst allowedSeverities = [\n  \"Low\",\n  \"Medium\",\n  \"High\",\n  \"Critical\"\n];\n\nconst category = allowedCategories.includes(parsed.category)\n  ? parsed.category\n  : \"Other\";\n\nconst severity = allowedSeverities.includes(parsed.severity)\n  ? parsed.severity\n  : \"Medium\";\n\nreturn [\n  {\n    json: {\n      ...formData,\n      ai: {\n        summary: parsed.summary || \"\",\n        category,\n        severity,\n        possible_cause: parsed.possible_cause || \"\",\n        suggested_solution: parsed.suggested_solution || \"\",\n        developer_notes: parsed.developer_notes || \"\",\n        missing_information: parsed.missing_information || \"\",\n        user_reply: parsed.user_reply || \"\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        16
+      ],
+      "id": "198ced98-9b26-4aef-b97a-526fb8e6d9d6",
+      "name": "Parse AI Analysis"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "BugPilot AI",
+          "cachedResultUrl": "YOUR_AIRTABLE_BASE_URL"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Bug Reports",
+          "cachedResultUrl": "YOUR_AIRTABLE_TABLE_URL"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Bug Title": "={{$json.title}}",
+            "Reporter Name": "={{$json.name}}",
+            "Reporter Email": "={{$json.email}}",
+            "Product / Page": "={{$json.product_page}}",
+            "Bug Description": "={{$json.description}}",
+            "Steps to Reproduce": "={{$json.steps}}",
+            "Expected Result": "={{$json.expected_result}}",
+            "Actual Result": "={{$json.actual_result}}",
+            "Device / Browser": "={{$json.device_browser}}",
+            "Transcript": "={{$json.transcript}}",
+            "Possible Cause Text": "={{$json.ai.possible_cause}}",
+            "Suggested Solution Text": "={{$json.ai.suggested_solution}}",
+            "Developer Notes Text": "={{$json.ai.developer_notes}}",
+            "User Reply Draft Text": "={{$json.ai.user_reply}}",
+            "AI Summary Text": "={{$json.ai.summary}}",
+            "AI Category": "={{$json.ai.category}}",
+            "AI Severity": "={{$json.ai.severity}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Bug Title",
+              "displayName": "Bug Title",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Reporter Name",
+              "displayName": "Reporter Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Reporter Email",
+              "displayName": "Reporter Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Product / Page",
+              "displayName": "Product / Page",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Bug Description",
+              "displayName": "Bug Description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Steps to Reproduce",
+              "displayName": "Steps to Reproduce",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Expected Result",
+              "displayName": "Expected Result",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Actual Result",
+              "displayName": "Actual Result",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Device / Browser",
+              "displayName": "Device / Browser",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Attachment URL",
+              "displayName": "Attachment URL",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Transcript",
+              "displayName": "Transcript",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "AI Category",
+              "displayName": "AI Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "UI",
+                  "value": "UI"
+                },
+                {
+                  "name": "Functional",
+                  "value": "Functional"
+                },
+                {
+                  "name": "Performance",
+                  "value": "Performance"
+                },
+                {
+                  "name": "Security",
+                  "value": "Security"
+                },
+                {
+                  "name": "Data Loss",
+                  "value": "Data Loss"
+                },
+                {
+                  "name": "Crash",
+                  "value": "Crash"
+                },
+                {
+                  "name": "Compatibility",
+                  "value": "Compatibility"
+                },
+                {
+                  "name": "Minor",
+                  "value": "Minor"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                },
+                {
+                  "name": "UI Bug",
+                  "value": "UI Bug"
+                },
+                {
+                  "name": "Backend Bug",
+                  "value": "Backend Bug"
+                },
+                {
+                  "name": "Functionality Bug",
+                  "value": "Functionality Bug"
+                },
+                {
+                  "name": "Performance Bug",
+                  "value": "Performance Bug"
+                },
+                {
+                  "name": "Content Bug",
+                  "value": "Content Bug"
+                },
+                {
+                  "name": "Calculation Bug",
+                  "value": "Calculation Bug"
+                },
+                {
+                  "name": "Configuration Bug",
+                  "value": "Configuration Bug"
+                },
+                {
+                  "name": "Frontend",
+                  "value": "Frontend"
+                },
+                {
+                  "name": "Backend",
+                  "value": "Backend"
+                },
+                {
+                  "name": "Auth",
+                  "value": "Auth"
+                },
+                {
+                  "name": "Payment",
+                  "value": "Payment"
+                },
+                {
+                  "name": "Performance",
+                  "value": "Performance"
+                },
+                {
+                  "name": "Database",
+                  "value": "Database"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Severity",
+              "displayName": "AI Severity",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Critical",
+                  "value": "Critical"
+                },
+                {
+                  "name": "High",
+                  "value": "High"
+                },
+                {
+                  "name": "Medium",
+                  "value": "Medium"
+                },
+                {
+                  "name": "Low",
+                  "value": "Low"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Possible Cause",
+              "displayName": "Possible Cause",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Suggested Solution",
+              "displayName": "Suggested Solution",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Developer Notes",
+              "displayName": "Developer Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "User Reply Draft",
+              "displayName": "User Reply Draft",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "Triaged",
+                  "value": "Triaged"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "In Review",
+                  "value": "In Review"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Won't Fix",
+                  "value": "Won't Fix"
+                },
+                {
+                  "name": "Duplicate",
+                  "value": "Duplicate"
+                },
+                {
+                  "name": "Closed",
+                  "value": "Closed"
+                },
+                {
+                  "name": "Open",
+                  "value": "Open"
+                },
+                {
+                  "name": "AI Reviewed",
+                  "value": "AI Reviewed"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "AI Summary Text",
+              "displayName": "AI Summary Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Suggested Solution Text",
+              "displayName": "Suggested Solution Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Developer Notes Text",
+              "displayName": "Developer Notes Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "User Reply Draft Text",
+              "displayName": "User Reply Draft Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Possible Cause Text",
+              "displayName": "Possible Cause Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1312,
+        16
+      ],
+      "id": "0962682c-5bbd-4ef5-ba68-a965f996d13d",
+      "name": "Create Airtable Bug Record"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3ee9fa9f-1764-4af6-a988-e0c691f41ce4",
+              "leftValue": "={{$node[\"Parse AI Analysis\"].json.attachment_url}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1520,
+        16
+      ],
+      "id": "b14741e6-3317-4b85-b305-1d19c2cd2633",
+      "name": "Check Attachment Exists"
+    },
+    {
+      "parameters": {
+        "url": "={{ encodeURI($node[\"Parse AI Analysis\"].json.attachment_url.trim()) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "7265bbc4-25c7-44be-a731-1fb9ddc55896",
+      "name": "Download Fillout Attachment"
+    },
+    {
+      "parameters": {
+        "name": "={{$node[\"Parse AI Analysis\"].json.attachment_filename || \"bug-attachment.png\"}}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "BugPilot AI Attachments",
+          "cachedResultUrl": "YOUR_GOOGLE_DRIVE_FOLDER_URL"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1968,
+        0
+      ],
+      "id": "2700fe3b-b60c-4ff9-b071-0bf7af9061e9",
+      "name": "Upload Attachment to Google Drive"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "BugPilot AI",
+          "cachedResultUrl": "YOUR_AIRTABLE_BASE_URL"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Bug Reports",
+          "cachedResultUrl": "YOUR_AIRTABLE_TABLE_URL"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{$node[\"Create Airtable Bug Record\"].json.id}}",
+            "Attachment URL": "={{$json.webViewLink}}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Bug Title",
+              "displayName": "Bug Title",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Reporter Name",
+              "displayName": "Reporter Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Reporter Email",
+              "displayName": "Reporter Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Product / Page",
+              "displayName": "Product / Page",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Bug Description",
+              "displayName": "Bug Description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Steps to Reproduce",
+              "displayName": "Steps to Reproduce",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Expected Result",
+              "displayName": "Expected Result",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Actual Result",
+              "displayName": "Actual Result",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Device / Browser",
+              "displayName": "Device / Browser",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Attachment URL",
+              "displayName": "Attachment URL",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Transcript",
+              "displayName": "Transcript",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "AI Category",
+              "displayName": "AI Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "UI",
+                  "value": "UI"
+                },
+                {
+                  "name": "Functional",
+                  "value": "Functional"
+                },
+                {
+                  "name": "Performance",
+                  "value": "Performance"
+                },
+                {
+                  "name": "Security",
+                  "value": "Security"
+                },
+                {
+                  "name": "Data Loss",
+                  "value": "Data Loss"
+                },
+                {
+                  "name": "Crash",
+                  "value": "Crash"
+                },
+                {
+                  "name": "Compatibility",
+                  "value": "Compatibility"
+                },
+                {
+                  "name": "Minor",
+                  "value": "Minor"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                },
+                {
+                  "name": "UI Bug",
+                  "value": "UI Bug"
+                },
+                {
+                  "name": "Backend Bug",
+                  "value": "Backend Bug"
+                },
+                {
+                  "name": "Functionality Bug",
+                  "value": "Functionality Bug"
+                },
+                {
+                  "name": "Performance Bug",
+                  "value": "Performance Bug"
+                },
+                {
+                  "name": "Content Bug",
+                  "value": "Content Bug"
+                },
+                {
+                  "name": "Calculation Bug",
+                  "value": "Calculation Bug"
+                },
+                {
+                  "name": "Configuration Bug",
+                  "value": "Configuration Bug"
+                },
+                {
+                  "name": "Frontend",
+                  "value": "Frontend"
+                },
+                {
+                  "name": "Backend",
+                  "value": "Backend"
+                },
+                {
+                  "name": "Auth",
+                  "value": "Auth"
+                },
+                {
+                  "name": "Payment",
+                  "value": "Payment"
+                },
+                {
+                  "name": "Performance",
+                  "value": "Performance"
+                },
+                {
+                  "name": "Database",
+                  "value": "Database"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "AI Severity",
+              "displayName": "AI Severity",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Critical",
+                  "value": "Critical"
+                },
+                {
+                  "name": "High",
+                  "value": "High"
+                },
+                {
+                  "name": "Medium",
+                  "value": "Medium"
+                },
+                {
+                  "name": "Low",
+                  "value": "Low"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Possible Cause",
+              "displayName": "Possible Cause",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Suggested Solution",
+              "displayName": "Suggested Solution",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Developer Notes",
+              "displayName": "Developer Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "User Reply Draft",
+              "displayName": "User Reply Draft",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "New",
+                  "value": "New"
+                },
+                {
+                  "name": "Triaged",
+                  "value": "Triaged"
+                },
+                {
+                  "name": "In Progress",
+                  "value": "In Progress"
+                },
+                {
+                  "name": "In Review",
+                  "value": "In Review"
+                },
+                {
+                  "name": "Resolved",
+                  "value": "Resolved"
+                },
+                {
+                  "name": "Won't Fix",
+                  "value": "Won't Fix"
+                },
+                {
+                  "name": "Duplicate",
+                  "value": "Duplicate"
+                },
+                {
+                  "name": "Closed",
+                  "value": "Closed"
+                },
+                {
+                  "name": "Open",
+                  "value": "Open"
+                },
+                {
+                  "name": "AI Reviewed",
+                  "value": "AI Reviewed"
+                },
+                {
+                  "name": "",
+                  "value": ""
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "AI Summary Text",
+              "displayName": "AI Summary Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Suggested Solution Text",
+              "displayName": "Suggested Solution Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Developer Notes Text",
+              "displayName": "Developer Notes Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "User Reply Draft Text",
+              "displayName": "User Reply Draft Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Possible Cause Text",
+              "displayName": "Possible Cause Text",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2176,
+        0
+      ],
+      "id": "8f89804e-2537-465c-88fa-59e22ef59087",
+      "name": "Update Airtable With AI + Drive Link"
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@example.com",
+        "toEmail": "your-email@example.com",
+        "subject": "=[BugPilot AI] Yeni Bug: {{$node[\"Parse AI Analysis\"].json.title}}",
+        "emailFormat": "text",
+        "text": "=Yeni bug raporu alındı.\n\n====================\nKULLANICI BİLGİLERİ\n====================\nAd Soyad:\n{{$node[\"Parse AI Analysis\"].json.name}}\n\nEmail:\n{{$node[\"Parse AI Analysis\"].json.email}}\n\nÜrün / Sayfa:\n{{$node[\"Parse AI Analysis\"].json.product_page}}\n\n====================\nBUG DETAYLARI\n====================\nBaşlık:\n{{$node[\"Parse AI Analysis\"].json.title}}\n\nAçıklama:\n{{$node[\"Parse AI Analysis\"].json.description}}\n\nTekrar Etme Adımları:\n{{$node[\"Parse AI Analysis\"].json.steps}}\n\nBeklenen Sonuç:\n{{$node[\"Parse AI Analysis\"].json.expected_result}}\n\nGerçekleşen Sonuç:\n{{$node[\"Parse AI Analysis\"].json.actual_result}}\n\nCihaz / Tarayıcı:\n{{$node[\"Parse AI Analysis\"].json.device_browser}}\n\nSes Transkripti:\n{{$node[\"Parse AI Analysis\"].json.transcript || \"Sesli açıklama yok.\"}}\n\nGoogle Drive Dosya Linki:\n{{$node[\"Upload Attachment to Google Drive\"].json.webViewLink}}\n\n====================\nAI ANALİZİ\n====================\nKategori:\n{{$node[\"Parse AI Analysis\"].json.ai.category}}\n\nÖncelik:\n{{$node[\"Parse AI Analysis\"].json.ai.severity}}\n\nÖzet:\n{{$node[\"Parse AI Analysis\"].json.ai.summary}}\n\nOlası Sebep:\n{{$node[\"Parse AI Analysis\"].json.ai.possible_cause}}\n\nÇözüm Önerisi:\n{{$node[\"Parse AI Analysis\"].json.ai.suggested_solution}}\n\nGeliştirici Notları:\n{{$node[\"Parse AI Analysis\"].json.ai.developer_notes}}\n\nEksik Bilgi:\n{{$node[\"Parse AI Analysis\"].json.ai.missing_information}}\n\nKullanıcıya Cevap Taslağı:\n{{$node[\"Parse AI Analysis\"].json.ai.user_reply}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2384,
+        0
+      ],
+      "id": "d0fa14ab-1fd2-414b-a7ab-9581bb01d660",
+      "name": "Send Email With Attachment",
+      "webhookId": "REPLACE_WITH_N8N_WEBHOOK_ID_AFTER_IMPORT"
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@example.com",
+        "toEmail": "your-email@example.com",
+        "subject": "=[BugPilot AI] Yeni Bug: {{$node[\"Parse AI Analysis\"].json.title}}",
+        "emailFormat": "text",
+        "text": "=Yeni bug raporu alındı.\n\n====================\nKULLANICI BİLGİLERİ\n====================\nAd Soyad:\n{{$node[\"Parse AI Analysis\"].json.name}}\n\nEmail:\n{{$node[\"Parse AI Analysis\"].json.email}}\n\nÜrün / Sayfa:\n{{$node[\"Parse AI Analysis\"].json.product_page}}\n\n====================\nBUG DETAYLARI\n====================\nBaşlık:\n{{$node[\"Parse AI Analysis\"].json.title}}\n\nAçıklama:\n{{$node[\"Parse AI Analysis\"].json.description}}\n\nTekrar Etme Adımları:\n{{$node[\"Parse AI Analysis\"].json.steps}}\n\nBeklenen Sonuç:\n{{$node[\"Parse AI Analysis\"].json.expected_result}}\n\nGerçekleşen Sonuç:\n{{$node[\"Parse AI Analysis\"].json.actual_result}}\n\nCihaz / Tarayıcı:\n{{$node[\"Parse AI Analysis\"].json.device_browser}}\n\nSes Transkripti:\n{{$node[\"Parse AI Analysis\"].json.transcript || \"Sesli açıklama yok.\"}}\n\nGoogle Drive Dosya Linki:\nDosya yüklenmedi.\n\n====================\nAI ANALİZİ\n====================\nKategori:\n{{$node[\"Parse AI Analysis\"].json.ai.category}}\n\nÖncelik:\n{{$node[\"Parse AI Analysis\"].json.ai.severity}}\n\nÖzet:\n{{$node[\"Parse AI Analysis\"].json.ai.summary}}\n\nOlası Sebep:\n{{$node[\"Parse AI Analysis\"].json.ai.possible_cause}}\n\nÇözüm Önerisi:\n{{$node[\"Parse AI Analysis\"].json.ai.suggested_solution}}\n\nGeliştirici Notları:\n{{$node[\"Parse AI Analysis\"].json.ai.developer_notes}}\n\nEksik Bilgi:\n{{$node[\"Parse AI Analysis\"].json.ai.missing_information}}\n\nKullanıcıya Cevap Taslağı:\n{{$node[\"Parse AI Analysis\"].json.ai.user_reply}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        208
+      ],
+      "id": "00fd20e0-b4dd-4b93-94f2-6c5d8b2de104",
+      "name": "Send Email No Attachment",
+      "webhookId": "REPLACE_WITH_N8N_WEBHOOK_ID_AFTER_IMPORT"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Bug Report": {
+      "main": [
+        [
+          {
+            "node": "Normalize Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Form Data": {
+      "main": [
+        [
+          {
+            "node": "Has Audio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Audio?": {
+      "main": [
+        [
+          {
+            "node": "Download Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Data Without Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Audio": {
+      "main": [
+        [
+          {
+            "node": "Upload Audio to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Audio to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Download Audio for Whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Audio for Whisper": {
+      "main": [
+        [
+          {
+            "node": "Groq Whisper Transcription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Whisper Transcription": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data With Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data Without Transcript": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Bug Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data With Transcript": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Bug Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Bug Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Create Airtable Bug Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Airtable Bug Record": {
+      "main": [
+        [
+          {
+            "node": "Check Attachment Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Attachment Exists": {
+      "main": [
+        [
+          {
+            "node": "Download Fillout Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Email No Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Fillout Attachment": {
+      "main": [
+        [
+          {
+            "node": "Upload Attachment to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Attachment to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Update Airtable With AI + Drive Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Airtable With AI + Drive Link": {
+      "main": [
+        [
+          {
+            "node": "Send Email With Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "REPLACE_AFTER_IMPORT",
+  "meta": {
+    "note": "Removed original instance metadata for public GitHub sharing."
+  },
+  "id": "REPLACE_AFTER_IMPORT",
+  "tags": []
+}
